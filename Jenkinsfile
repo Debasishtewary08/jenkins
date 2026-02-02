@@ -1,52 +1,47 @@
 pipeline {
-    agent any
+    agent any
 
-    environment {
-        IMAGE_NAME = "prasad67/maven-web-app"
-    }
+    stages {
 
-    stages {
+        stage('Clone') {
+            steps {
+                git ''
+            }
+        }
 
-        stage('Checkout Code') {
-            steps {
-                checkout scm
-            }
-        }
+        stage('Maven Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
 
-        stage('Build WAR') {
-            steps {
-                sh 'mvn clean package'
-            }
-        }
+        stage('Stop & Remove Old Container') {
+            steps {
+                sh '''
+                docker stop azure || true
+                docker rm azure || true
+                '''
+            }
+        }
 
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                  docker build -t $IMAGE_NAME:${BUILD_NUMBER} .
-                '''
-            }
-        }
+        stage('Remove Old Image') {
+            steps {
+                sh '''
+                docker rmi amazon || true
+                '''
+            }
+        }
 
-        stage('Login to Docker Hub') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    '''
-                }
-            }
-        }
+        stage('Docker Image Build') {
+            steps {
+                sh 'docker build -t amazon .'
+            }
+        }
 
-        stage('Push Image to Docker Hub') {
-            steps {
-                sh '''
-                  docker push $IMAGE_NAME:${BUILD_NUMBER}
-                '''
-            }
-        }
-    }
+        stage('Docker Deploy') {
+            steps {
+                sh 'docker run -d -p 6060:8080 --name azure amazon'
+            }
+        }
+    }
 }
